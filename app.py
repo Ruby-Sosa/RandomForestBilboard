@@ -1,8 +1,5 @@
 
 
-
-    
-  
                 mostrar_tarjeta("Género", registro.iloc[0]["genre"])
 
         # ==========================================
@@ -131,3 +128,5 @@ st.markdown("""
         Modelo de clasificación: Random Forest
     </p>
 </div>
+
+
