@@ -22,7 +22,6 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-
 .stApp {
     background: linear-gradient(135deg, #10101c, #19152b, #10101c);
     color: white;
@@ -57,6 +56,16 @@ p, label, span {
 
 .hero p {
     color: #f0e7ff;
+}
+
+.mensaje-exito {
+    background: linear-gradient(120deg, #30234f, #54347a);
+    border: 1px solid #a77bea;
+    border-radius: 12px;
+    padding: 13px 18px;
+    color: #ffffff !important;
+    font-weight: 600;
+    margin: 12px 0 18px 0;
 }
 
 .info-card {
@@ -173,7 +182,6 @@ div[data-baseweb="select"] > div {
 hr {
     border-color: rgba(190,160,255,0.25);
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -202,11 +210,9 @@ def cargar_modelo():
     return modelo, columnas
 
 try:
-
     modelo, columnas = cargar_modelo()
 
 except Exception as e:
-
     st.error(f"No se pudieron cargar los archivos del modelo: {e}")
     st.stop()
 
@@ -230,7 +236,6 @@ def cargar_datos():
     columnas_texto = datos.select_dtypes(include="object").columns
 
     for columna in columnas_texto:
-
         datos[columna] = datos[columna].str.strip().str.upper()
 
     # Limpiar duraciones
@@ -261,22 +266,15 @@ def cargar_datos():
         inplace=True
     )
 
-    # One-Hot Encoding
-
-    datos = pd.get_dummies(
-        datos,
-        columns=["mood", "tempo", "genre", "artist_type"],
-        dtype=int
-    )
+    # Conservamos las categorías originales para mostrarlas.
+    # El One-Hot Encoding se aplica antes de la predicción.
 
     return datos
 
 try:
-
     datos = cargar_datos()
 
 except Exception as e:
-
     st.error(f"No se pudo cargar el dataset: {e}")
     st.stop()
 
@@ -332,7 +330,7 @@ def buscar_itunes(titulo, artista):
 
 def mostrar_tarjeta(etiqueta, valor):
 
-    if pd.isna(valor) or valor == "":
+    if valor is None or pd.isna(valor) or valor == "":
         valor = "No disponible"
 
     st.markdown(f"""
@@ -356,7 +354,6 @@ def convertir_duracion(milisegundos):
 
     return f"{minutos}:{segundos_restantes:02d} min"
 
-
 # ==========================================
 # 8. FORMULARIO DE BÚSQUEDA
 # ==========================================
@@ -371,17 +368,17 @@ st.write(
 col1, col2 = st.columns(2)
 
 with col1:
-
     titulo = st.text_input(
         "Nombre de la canción",
-        placeholder="Ej. Shape of You"
+        placeholder="Ej. Shape of You",
+        key="titulo_cancion"
     )
 
 with col2:
-
     artista = st.text_input(
         "Nombre del artista",
-        placeholder="Ej. Ed Sheeran"
+        placeholder="Ej. Ed Sheeran",
+        key="artista_cancion"
     )
 
 buscar = st.button(
@@ -393,8 +390,8 @@ buscar = st.button(
 # 9. PROCESAR BÚSQUEDA
 # ==========================================
 
-# Guardar los resultados en session_state para que no desaparezcan
-# cuando Streamlit vuelva a ejecutar la aplicación al cambiar el selectbox.
+# Guardar los resultados para que no desaparezcan
+# al cambiar la canción seleccionada.
 
 if "resultados_itunes" not in st.session_state:
     st.session_state.resultados_itunes = []
@@ -403,36 +400,65 @@ if "busqueda_realizada" not in st.session_state:
     st.session_state.busqueda_realizada = False
 
 if buscar:
+
     if not titulo.strip() or not artista.strip():
+
         st.warning("Escribe el título de la canción y el artista.")
+
         st.session_state.resultados_itunes = []
         st.session_state.busqueda_realizada = False
+
     else:
+
         with st.spinner("Buscando información de la canción..."):
+
             try:
+
                 resultados = buscar_itunes(titulo, artista)
+
                 st.session_state.resultados_itunes = resultados
                 st.session_state.busqueda_realizada = True
-                st.session_state.seleccion_anterior = 0
+
+                # Reiniciar la selección al realizar una nueva búsqueda
+                st.session_state.cancion_seleccionada = 0
+
             except Exception as e:
+
                 st.error(f"Error al consultar iTunes: {e}")
+
                 st.session_state.resultados_itunes = []
                 st.session_state.busqueda_realizada = False
 
 # Mostrar los resultados guardados incluso después de cambiar la selección
+
 if st.session_state.busqueda_realizada:
+
     resultados = st.session_state.resultados_itunes
 
     if not resultados:
-        st.warning("No se encontraron canciones en iTunes.")
-    else:
-        st.success(f"Se encontraron {len(resultados)} resultados.")
 
-        opciones = [
-            f"{cancion.get('trackName', 'Sin título')} - "
-            f"{cancion.get('artistName', 'Artista desconocido')}"
-            for cancion in resultados
-        ]
+        st.warning("No se encontraron canciones en iTunes.")
+
+    else:
+
+        st.markdown(
+            f'<div class="mensaje-exito">🎵 Se encontraron '
+            f'{len(resultados)} resultados.</div>',
+            unsafe_allow_html=True
+        )
+
+        opciones = []
+
+        for cancion in resultados:
+
+            nombre = cancion.get("trackName", "Sin título")
+
+            interprete = cancion.get(
+                "artistName",
+                "Artista desconocido"
+            )
+
+            opciones.append(f"{nombre} - {interprete}")
 
         seleccion = st.selectbox(
             "Selecciona la canción correcta:",
@@ -444,50 +470,60 @@ if st.session_state.busqueda_realizada:
         coincidencia = resultados[seleccion]
 
         # ==========================================
-        # 10. FICHA TÉCNICA DE ITUNES
+        # 10. INFORMACIÓN RECUPERADA DE ITUNES
         # ==========================================
 
         st.divider()
+
         st.markdown("## 🎧 Información recuperada de iTunes")
-        st.caption("Información proporcionada por el catálogo de iTunes")
+
+        st.caption("Datos proporcionados por el catálogo de iTunes")
 
         col_imagen, col_datos = st.columns([1, 2])
 
         with col_imagen:
+
             imagen = coincidencia.get("artworkUrl100")
+
             if imagen:
-                st.image(imagen, use_container_width=True)
+
+                st.image(
+                    imagen,
+                    use_container_width=True
+                )
+
             else:
+
                 st.info("Portada no disponible.")
 
         with col_datos:
+
             st.markdown(
                 f"### {coincidencia.get('trackName', 'Sin título')}"
             )
+
             st.markdown(
                 f"**{coincidencia.get('artistName', 'Artista desconocido')}**"
             )
 
-            mostrar_tarjeta("Álbum", coincidencia.get("collectionName"))
-            mostrar_tarjeta(
-                "Género musical",
-                coincidencia.get("primaryGenreName")
-            )
+            # Solo mostramos la fecha en esta sección
             mostrar_tarjeta(
                 "Fecha de lanzamiento",
                 coincidencia.get("releaseDate", "")[:10]
             )
-            mostrar_tarjeta(
-                "Duración",
-                convertir_duracion(coincidencia.get("trackTimeMillis"))
-            )
-            mostrar_tarjeta("País de la tienda", coincidencia.get("country"))
+
+        # Vista previa de audio
 
         vista_previa = coincidencia.get("previewUrl")
+
         if vista_previa:
+
             st.markdown("#### ▶️ Escuchar vista previa")
+
             st.audio(vista_previa)
+
         else:
+
             st.info("Esta canción no tiene vista previa disponible.")
 
         # ==========================================
@@ -497,21 +533,31 @@ if st.session_state.busqueda_realizada:
         titulo_busqueda = normalizar_texto(
             coincidencia.get("trackName", "")
         )
+
         artista_busqueda = normalizar_texto(
             coincidencia.get("artistName", "")
         )
 
         datos_busqueda = datos.copy()
+
         datos_busqueda["titulo_normalizado"] = (
             datos_busqueda["title"].apply(normalizar_texto)
         )
+
         datos_busqueda["artista_normalizado"] = (
             datos_busqueda["artist"].apply(normalizar_texto)
         )
 
         coincidencias = datos_busqueda[
-            (datos_busqueda["titulo_normalizado"] == titulo_busqueda)
-            & (datos_busqueda["artista_normalizado"] == artista_busqueda)
+            (
+                datos_busqueda["titulo_normalizado"]
+                == titulo_busqueda
+            )
+            &
+            (
+                datos_busqueda["artista_normalizado"]
+                == artista_busqueda
+            )
         ]
 
         # ==========================================
@@ -519,9 +565,11 @@ if st.session_state.busqueda_realizada:
         # ==========================================
 
         st.divider()
+
         st.markdown("## 📊 Datos recuperados de Billboard")
 
         if coincidencias.empty:
+
             registro = None
 
             st.markdown("""
@@ -533,54 +581,80 @@ if st.session_state.busqueda_realizada:
             </div>
             """, unsafe_allow_html=True)
 
-            # Mostrar aquí los datos disponibles de iTunes para que
-            # esta sección no quede vacía cuando no existe coincidencia.
+            # Mostrar los datos de iTunes en esta sección
+
             fecha_lanzamiento = coincidencia.get("releaseDate", "")
-            anio_lanzamiento = (
-                fecha_lanzamiento[:4] if fecha_lanzamiento else "No disponible"
-            )
+
+            if fecha_lanzamiento:
+                anio_lanzamiento = fecha_lanzamiento[:4]
+            else:
+                anio_lanzamiento = "No disponible"
 
             col1, col2, col3 = st.columns(3)
+
             with col1:
-                mostrar_tarjeta("Título", coincidencia.get("trackName"))
+                mostrar_tarjeta(
+                    "Título",
+                    coincidencia.get("trackName")
+                )
+
             with col2:
-                mostrar_tarjeta("Artista", coincidencia.get("artistName"))
+                mostrar_tarjeta(
+                    "Artista",
+                    coincidencia.get("artistName")
+                )
+
             with col3:
-                mostrar_tarjeta("Álbum", coincidencia.get("collectionName"))
+                mostrar_tarjeta(
+                    "Álbum",
+                    coincidencia.get("collectionName")
+                )
 
             col1, col2, col3 = st.columns(3)
+
             with col1:
                 mostrar_tarjeta(
                     "Género musical",
                     coincidencia.get("primaryGenreName")
                 )
+
             with col2:
-                mostrar_tarjeta("Año de lanzamiento", anio_lanzamiento)
+                mostrar_tarjeta(
+                    "Año de lanzamiento",
+                    anio_lanzamiento
+                )
+
             with col3:
                 mostrar_tarjeta(
                     "Duración",
-                    convertir_duracion(coincidencia.get("trackTimeMillis"))
+                    convertir_duracion(
+                        coincidencia.get("trackTimeMillis")
+                    )
                 )
 
             st.caption(
-                "Estos datos proceden de iTunes y no sustituyen las "
-                "características del dataset de entrenamiento."
+                "Estos datos proceden de iTunes y no sustituyen "
+                "las características del dataset de entrenamiento."
             )
 
         else:
+
             registro = coincidencias.iloc[[0]].copy()
 
             col1, col2, col3 = st.columns(3)
+
             with col1:
                 mostrar_tarjeta(
                     "Año de la lista",
                     registro.iloc[0]["anio_lista"]
                 )
+
             with col2:
                 mostrar_tarjeta(
                     "Mes de la lista",
                     registro.iloc[0]["mes_lista"]
                 )
+
             with col3:
                 mostrar_tarjeta(
                     "Día de la lista",
@@ -588,10 +662,19 @@ if st.session_state.busqueda_realizada:
                 )
 
             col1, col2, col3 = st.columns(3)
+
             with col1:
-                mostrar_tarjeta("Estado de ánimo", registro.iloc[0]["mood"])
+                mostrar_tarjeta(
+                    "Estado de ánimo",
+                    registro.iloc[0]["mood"]
+                )
+
             with col2:
-                mostrar_tarjeta("Ritmo", registro.iloc[0]["tempo"])
+                mostrar_tarjeta(
+                    "Ritmo",
+                    registro.iloc[0]["tempo"]
+                )
+
             with col3:
                 mostrar_tarjeta(
                     "Tipo de artista",
@@ -599,40 +682,51 @@ if st.session_state.busqueda_realizada:
                 )
 
             col1, col2 = st.columns(2)
+
             with col1:
                 mostrar_tarjeta(
                     "Duración",
                     f"{registro.iloc[0]['durationSeg']:.0f} segundos"
                 )
+
             with col2:
-                mostrar_tarjeta("Género", registro.iloc[0]["genre"])
+                mostrar_tarjeta(
+                    "Género",
+                    registro.iloc[0]["genre"]
+                )
 
         # ==========================================
         # 13. RESULTADO DEL PRONÓSTICO
         # ==========================================
 
         st.divider()
+
         st.markdown("## 🔮 Resultado del pronóstico")
 
         if registro is None:
+
             st.markdown("""
             <div class="aviso-pronostico">
-                <h3>🔮 Pronóstico no disponible</h3>
+                <h3>🔮 No se puede calcular un pronóstico</h3>
                 <p>
-                    Nuestro modelo Random Forest necesita características
-                    del dataset de entrenamiento que no están disponibles
-                    para esta canción.
+                    Esta canción no aparece en el dataset de Billboard
+                    con el que se entrenó nuestro modelo Random Forest.
+                    Por eso no contamos con las características necesarias
+                    para calcular una predicción confiable.
                 </p>
                 <p>
-                    <strong>¡No te preocupes!</strong>
-                    Puedes buscar otra canción que se encuentre registrada
-                    en el dataset de Billboard.
+                    <strong>¿Qué puedes hacer?</strong>
+                    Prueba con otra canción que sí esté registrada en el
+                    dataset. La información de iTunes que aparece arriba
+                    sí se recuperó correctamente.
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
         else:
+
             # Preparar características para el modelo
+
             X_cancion = registro.drop(
                 columns=[
                     "top",
@@ -642,7 +736,17 @@ if st.session_state.busqueda_realizada:
                     "artista_normalizado"
                 ],
                 errors="ignore"
+            ).copy()
+
+            # Convertir las categorías al mismo formato usado al entrenar.
+
+            X_cancion = pd.get_dummies(
+                X_cancion,
+                columns=["mood", "tempo", "genre", "artist_type"],
+                dtype=int
             )
+
+            # Mantener exactamente las columnas utilizadas por el modelo.
 
             X_cancion = X_cancion.reindex(
                 columns=columnas,
@@ -650,32 +754,47 @@ if st.session_state.busqueda_realizada:
             )
 
             # Generar predicción
+
             prediccion = modelo.predict(X_cancion)[0]
+
             probabilidades = modelo.predict_proba(X_cancion)[0]
+
             probabilidad_top = probabilidades[
                 list(modelo.classes_).index(1)
             ]
 
             confianza = (
-                probabilidad_top if prediccion == 1
+                probabilidad_top
+                if prediccion == 1
                 else 1 - probabilidad_top
             )
 
+            # Resultado positivo
+
             if prediccion == 1:
+
                 if confianza >= 0.80:
+
                     mensaje = "¡Casi felicidades! 🎉"
+
                     descripcion = (
-                        "El modelo predice con una probabilidad alta que "
-                        "esta canción pertenece a la clase Billboard Top."
+                        "El modelo predice con una probabilidad alta "
+                        "que esta canción pertenece a la clase Billboard Top."
                     )
+
                 elif confianza >= 0.60:
+
                     mensaje = "¡Hay buenas posibilidades! ✨"
+
                     descripcion = (
                         "El modelo estima que esta canción podría "
                         "pertenecer al Billboard Top."
                     )
+
                 else:
+
                     mensaje = "¡El pronóstico es favorable! 🎵"
+
                     descripcion = (
                         "El modelo se inclina por la clase Billboard Top, "
                         "aunque su confianza es limitada."
@@ -688,32 +807,50 @@ if st.session_state.busqueda_realizada:
                     <div class="result-number">
                         {probabilidad_top * 100:.2f}%
                     </div>
-                    <p>Probabilidad estimada de pertenecer a la clase Billboard Top</p>
+                    <p>
+                        Probabilidad estimada de pertenecer
+                        a la clase Billboard Top
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
+
                 st.balloons()
 
             else:
+
                 st.markdown(f"""
                 <div class="result-negative">
                     <h2>El pronóstico no es favorable 🎧</h2>
                     <p>
-                        El modelo predice que esta canción no pertenece
-                        a la clase Billboard Top.
+                        El modelo predice que esta canción
+                        no pertenece a la clase Billboard Top.
                     </p>
                     <div class="result-number">
                         {probabilidad_top * 100:.2f}%
                     </div>
-                    <p>Probabilidad estimada de pertenecer a la clase Billboard Top</p>
+                    <p>
+                        Probabilidad estimada de pertenecer
+                        a la clase Billboard Top
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
 
-            st.markdown("#### Nivel de confianza de la clase predicha")
+            # Barra de confianza
+
+            st.markdown(
+                "#### Nivel de confianza de la clase predicha"
+            )
+
             st.progress(float(confianza))
-            st.write(f"Confianza estimada: {confianza * 100:.2f}%")
+
+            st.write(
+                f"Confianza estimada: {confianza * 100:.2f}%"
+            )
+
             st.caption(
-                "El porcentaje es una estimación del modelo Random Forest "
-                "y no garantiza una posición específica en Billboard."
+                "El porcentaje es una estimación del modelo "
+                "Random Forest y no garantiza una posición "
+                "específica en Billboard."
             )
 
 # ==========================================
@@ -734,3 +871,4 @@ st.markdown("""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
