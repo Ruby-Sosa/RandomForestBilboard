@@ -5,10 +5,9 @@ import joblib
 import requests
 import unicodedata
 import re
-from datetime import datetime
 
 # ==========================================
-# 1. CONFIGURACIÓN Y DISEÑO
+# 1. CONFIGURACIÓN
 # ==========================================
 
 st.set_page_config(
@@ -17,13 +16,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# Diseño personalizado
+# ==========================================
+# 2. DISEÑO PERSONALIZADO
+# ==========================================
+
 st.markdown("""
 <style>
 
 .stApp {
     background: linear-gradient(135deg, #10101c, #19152b, #10101c);
-    color: #ffffff;
+    color: white;
 }
 
 .block-container {
@@ -32,8 +34,8 @@ st.markdown("""
     padding-bottom: 3rem;
 }
 
-h1, h2, h3 {
-    color: #ffffff !important;
+h1, h2, h3, h4 {
+    color: white !important;
 }
 
 p, label, span {
@@ -51,42 +53,67 @@ p, label, span {
 
 .hero h1 {
     font-size: 38px;
-    margin-bottom: 8px;
 }
 
 .hero p {
-    font-size: 16px;
     color: #f0e7ff;
 }
 
-.section-card {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(190, 160, 255, 0.20);
-    border-radius: 18px;
-    padding: 22px;
-    margin-bottom: 20px;
-}
-
 .info-card {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(190, 160, 255, 0.20);
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(190,160,255,0.20);
     border-radius: 14px;
     padding: 16px;
-    min-height: 95px;
+    min-height: 90px;
     margin-bottom: 12px;
 }
 
 .info-label {
-    color: #bda8ec;
+    color: #c5a8f5 !important;
     font-size: 13px;
     margin-bottom: 7px;
 }
 
 .info-value {
-    color: white;
+    color: #ffffff !important;
     font-size: 17px;
     font-weight: 600;
     overflow-wrap: anywhere;
+}
+
+.aviso-personalizado {
+    background: linear-gradient(120deg, #30234f, #432c68);
+    border: 1px solid #a77bea;
+    border-left: 5px solid #c49aff;
+    border-radius: 13px;
+    padding: 18px 20px;
+    margin: 15px 0;
+    color: #ffffff !important;
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+.aviso-personalizado strong {
+    color: #e2caff !important;
+}
+
+.aviso-pronostico {
+    background: linear-gradient(120deg, #38264f, #512f68);
+    border: 1px solid #c084fc;
+    border-radius: 18px;
+    padding: 25px;
+    margin: 15px 0;
+    color: #ffffff !important;
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+.aviso-pronostico h3 {
+    color: #e9d5ff !important;
+}
+
+.aviso-pronostico p {
+    color: #ffffff !important;
 }
 
 .result-positive {
@@ -107,8 +134,9 @@ p, label, span {
     margin-top: 15px;
 }
 
-.result-positive h2, .result-negative h2 {
-    margin-top: 0;
+.result-positive h2,
+.result-negative h2 {
+    color: white !important;
 }
 
 .result-number {
@@ -131,7 +159,6 @@ div.stButton > button {
 div.stButton > button:hover {
     background: linear-gradient(90deg, #9254e8, #bb68ed);
     color: white;
-    border: none;
 }
 
 div[data-baseweb="input"] input {
@@ -144,13 +171,14 @@ div[data-baseweb="select"] > div {
 }
 
 hr {
-    border-color: rgba(190, 160, 255, 0.25);
+    border-color: rgba(190,160,255,0.25);
 }
 
 </style>
 """, unsafe_allow_html=True)
 
 # Encabezado
+
 st.markdown("""
 <div class="hero">
     <h1>🎵 Billboard Predictor</h1>
@@ -162,23 +190,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CARGAR MODELO Y COLUMNAS
+# 3. CARGAR MODELO Y COLUMNAS
 # ==========================================
 
 @st.cache_resource
 def cargar_modelo():
+
     modelo = joblib.load("modelo_random_forest.joblib")
     columnas = joblib.load("columnas_modelo.joblib")
+
     return modelo, columnas
 
 try:
+
     modelo, columnas = cargar_modelo()
+
 except Exception as e:
+
     st.error(f"No se pudieron cargar los archivos del modelo: {e}")
     st.stop()
 
 # ==========================================
-# 3. CARGAR DATASET
+# 4. CARGAR DATASET
 # ==========================================
 
 @st.cache_data
@@ -193,12 +226,15 @@ def cargar_datos():
     datos = pd.read_csv(url)
 
     # Limpiar textos
+
     columnas_texto = datos.select_dtypes(include="object").columns
 
     for columna in columnas_texto:
+
         datos[columna] = datos[columna].str.strip().str.upper()
 
     # Limpiar duraciones
+
     mediana = datos.loc[
         datos["durationSeg"] <= 600,
         "durationSeg"
@@ -210,6 +246,7 @@ def cargar_datos():
     ] = mediana
 
     # Procesar fechas
+
     fecha = pd.to_datetime(
         datos["chart_date"].astype(str),
         format="%Y%m%d"
@@ -225,6 +262,7 @@ def cargar_datos():
     )
 
     # One-Hot Encoding
+
     datos = pd.get_dummies(
         datos,
         columns=["mood", "tempo", "genre", "artist_type"],
@@ -234,18 +272,22 @@ def cargar_datos():
     return datos
 
 try:
+
     datos = cargar_datos()
+
 except Exception as e:
+
     st.error(f"No se pudo cargar el dataset: {e}")
     st.stop()
 
 # ==========================================
-# 4. NORMALIZAR TEXTO
+# 5. NORMALIZAR TEXTO
 # ==========================================
 
 def normalizar_texto(texto):
 
     texto = str(texto).upper().strip()
+
     texto = unicodedata.normalize("NFD", texto)
 
     texto = "".join(
@@ -254,12 +296,13 @@ def normalizar_texto(texto):
     )
 
     texto = re.sub(r"[^A-Z0-9 ]", " ", texto)
+
     texto = re.sub(r"\s+", " ", texto)
 
     return texto.strip()
 
 # ==========================================
-# 5. BUSCAR EN ITUNES
+# 6. BUSCAR EN ITUNES
 # ==========================================
 
 def buscar_itunes(titulo, artista):
@@ -284,12 +327,12 @@ def buscar_itunes(titulo, artista):
     return respuesta.json().get("results", [])
 
 # ==========================================
-# 6. FUNCIONES PARA MOSTRAR INFORMACIÓN
+# 7. FUNCIONES AUXILIARES
 # ==========================================
 
 def mostrar_tarjeta(etiqueta, valor):
 
-    if valor is None or valor == "":
+    if pd.isna(valor) or valor == "":
         valor = "No disponible"
 
     st.markdown(f"""
@@ -306,32 +349,36 @@ def convertir_duracion(milisegundos):
         return "No disponible"
 
     segundos = int(milisegundos / 1000)
+
     minutos = segundos // 60
+
     segundos_restantes = segundos % 60
 
     return f"{minutos}:{segundos_restantes:02d} min"
 
 
 # ==========================================
-# 7. FORMULARIO DE BÚSQUEDA
+# 8. FORMULARIO DE BÚSQUEDA
 # ==========================================
 
-st.markdown("""
-<div class="section-card">
-    <h3>🔎 Buscar una canción</h3>
-    <p>Ingresa el título y el nombre del artista para comenzar.</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("## 🔎 Buscar una canción")
+
+st.write(
+    "Ingresa el título y el nombre del artista "
+    "para consultar su información."
+)
 
 col1, col2 = st.columns(2)
 
 with col1:
+
     titulo = st.text_input(
         "Nombre de la canción",
         placeholder="Ej. Shape of You"
     )
 
 with col2:
+
     artista = st.text_input(
         "Nombre del artista",
         placeholder="Ej. Ed Sheeran"
@@ -343,7 +390,7 @@ buscar = st.button(
 )
 
 # ==========================================
-# 8. PROCESAR BÚSQUEDA
+# 9. PROCESAR BÚSQUEDA
 # ==========================================
 
 if buscar:
@@ -357,9 +404,11 @@ if buscar:
         with st.spinner("Buscando información de la canción..."):
 
             try:
+
                 resultados = buscar_itunes(titulo, artista)
 
             except Exception as e:
+
                 st.error(f"Error al consultar iTunes: {e}")
                 st.stop()
 
@@ -378,6 +427,7 @@ if buscar:
             for cancion in resultados:
 
                 nombre = cancion.get("trackName", "Sin título")
+
                 interprete = cancion.get(
                     "artistName",
                     "Artista desconocido"
@@ -396,20 +446,13 @@ if buscar:
             coincidencia = resultados[seleccion]
 
             # ==========================================
-            # 9. FICHA TÉCNICA
+            # 10. FICHA TÉCNICA DE ITUNES
             # ==========================================
 
             st.divider()
 
-            st.markdown(
-                "## 🎧 Ficha técnica",
-                help="Datos recuperados de iTunes y del conjunto de datos Billboard."
-            )
-
-            st.caption(
-                "Datos recuperados de la búsqueda musical y, "
-                "cuando existe coincidencia, del dataset utilizado."
-            )
+            st.markdown("## 🎧 Ficha técnica")
+            st.caption("Datos recuperados de iTunes")
 
             col_imagen, col_datos = st.columns([1, 2])
 
@@ -418,8 +461,14 @@ if buscar:
                 imagen = coincidencia.get("artworkUrl100")
 
                 if imagen:
-                    st.image(imagen, use_container_width=True)
+
+                    st.image(
+                        imagen,
+                        use_container_width=True
+                    )
+
                 else:
+
                     st.info("Portada no disponible.")
 
             with col_datos:
@@ -432,37 +481,49 @@ if buscar:
                     f"**{coincidencia.get('artistName', 'Artista desconocido')}**"
                 )
 
-                st.write(
-                    "Álbum:",
-                    coincidencia.get("collectionName", "No disponible")
+                mostrar_tarjeta(
+                    "Álbum",
+                    coincidencia.get("collectionName")
                 )
 
-                st.write(
-                    "Género:",
-                    coincidencia.get("primaryGenreName", "No disponible")
+                mostrar_tarjeta(
+                    "Género musical",
+                    coincidencia.get("primaryGenreName")
                 )
 
-                st.write(
-                    "Fecha de lanzamiento:",
-                    coincidencia.get("releaseDate", "No disponible")[:10]
+                mostrar_tarjeta(
+                    "Fecha de lanzamiento",
+                    coincidencia.get("releaseDate", "")[:10]
                 )
 
-                st.write(
-                    "Duración:",
+                mostrar_tarjeta(
+                    "Duración",
                     convertir_duracion(
                         coincidencia.get("trackTimeMillis")
                     )
                 )
 
+                mostrar_tarjeta(
+                    "País de la tienda",
+                    coincidencia.get("country")
+                )
+
             # Vista previa
+
             vista_previa = coincidencia.get("previewUrl")
 
             if vista_previa:
+
                 st.markdown("#### ▶️ Escuchar vista previa")
+
                 st.audio(vista_previa)
 
+            else:
+
+                st.info("Esta canción no tiene vista previa disponible.")
+
             # ==========================================
-            # 10. BUSCAR EN EL DATASET
+            # 11. BUSCAR EN DATASET BILLBOARD
             # ==========================================
 
             titulo_busqueda = normalizar_texto(
@@ -484,24 +545,37 @@ if buscar:
             )
 
             coincidencias = datos_busqueda[
-                (datos_busqueda["titulo_normalizado"] == titulo_busqueda)
+                (
+                    datos_busqueda["titulo_normalizado"]
+                    == titulo_busqueda
+                )
                 &
-                (datos_busqueda["artista_normalizado"] == artista_busqueda)
+                (
+                    datos_busqueda["artista_normalizado"]
+                    == artista_busqueda
+                )
             ]
 
             # ==========================================
-            # 11. DATOS DEL DATASET
+            # 12. DATOS RECUPERADOS DE BILLBOARD
             # ==========================================
 
-            st.markdown("### 📊 Datos recuperados de Billboard")
+            st.divider()
+
+            st.markdown("## 📊 Datos recuperados de Billboard")
 
             if coincidencias.empty:
 
-                st.info(
-                    "Esta canción no aparece en el dataset de entrenamiento. "
-                    "Se muestran los datos recuperados de iTunes, "
-                    "pero no es posible generar un pronóstico con el modelo."
-                )
+                st.markdown("""
+                <div class="aviso-personalizado">
+                    <strong>🎵 Información adicional</strong><br>
+                    Esta canción no aparece en nuestro dataset
+                    de entrenamiento. Sin embargo, puedes consultar
+                    los datos recuperados de iTunes en la ficha técnica.
+                    No se encontraron las características necesarias
+                    para utilizar el modelo actual.
+                </div>
+                """, unsafe_allow_html=True)
 
                 registro = None
 
@@ -512,39 +586,44 @@ if buscar:
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
+
                     mostrar_tarjeta(
                         "Año de la lista",
                         registro.iloc[0]["anio_lista"]
                     )
 
                 with col2:
+
                     mostrar_tarjeta(
                         "Mes de la lista",
                         registro.iloc[0]["mes_lista"]
                     )
 
                 with col3:
+
                     mostrar_tarjeta(
                         "Día de la lista",
                         registro.iloc[0]["dia_lista"]
                     )
 
-                # Mostrar características categóricas originales
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
+
                     mostrar_tarjeta(
                         "Estado de ánimo",
                         registro.iloc[0]["mood"]
                     )
 
                 with col2:
+
                     mostrar_tarjeta(
                         "Ritmo",
                         registro.iloc[0]["tempo"]
                     )
 
                 with col3:
+
                     mostrar_tarjeta(
                         "Tipo de artista",
                         registro.iloc[0]["artist_type"]
@@ -553,21 +632,21 @@ if buscar:
                 col1, col2 = st.columns(2)
 
                 with col1:
+
                     mostrar_tarjeta(
-                        "Duración del dataset",
-                        convertir_duracion(
-                            registro.iloc[0]["durationSeg"] * 1000
-                        )
+                        "Duración",
+                        f"{registro.iloc[0]['durationSeg']:.0f} segundos"
                     )
 
                 with col2:
+
                     mostrar_tarjeta(
-                        "Género del dataset",
+                        "Género",
                         registro.iloc[0]["genre"]
                     )
 
             # ==========================================
-            # 12. RESULTADO DEL PRONÓSTICO
+            # 13. RESULTADO DEL PRONÓSTICO
             # ==========================================
 
             st.divider()
@@ -576,16 +655,26 @@ if buscar:
 
             if registro is None:
 
-                st.warning(
-                    "No se puede generar un pronóstico porque "
-                    "no se encontraron las características de esta "
-                    "canción en el dataset utilizado para entrenar "
-                    "el modelo Random Forest."
-                )
+                st.markdown("""
+                <div class="aviso-pronostico">
+                    <h3>🔮 Pronóstico no disponible</h3>
+                    <p>
+                        Nuestro modelo Random Forest necesita
+                        características que no se encontraron
+                        en el dataset de entrenamiento.
+                    </p>
+                    <p>
+                        <strong>¡No te preocupes!</strong>
+                        Puedes intentar buscar otra canción
+                        que se encuentre registrada en Billboard.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
 
             else:
 
                 # Preparar características
+
                 X_cancion = registro.drop(
                     columns=[
                         "top",
@@ -601,7 +690,8 @@ if buscar:
                     fill_value=0
                 )
 
-                # Predicción
+                # Generar predicción
+
                 prediccion = modelo.predict(X_cancion)[0]
 
                 probabilidades = modelo.predict_proba(X_cancion)[0]
@@ -617,10 +707,13 @@ if buscar:
                 )
 
                 # Resultado positivo
+
                 if prediccion == 1:
 
                     if confianza >= 0.80:
+
                         mensaje = "¡Casi felicidades! 🎉"
+
                         descripcion = (
                             "El modelo predice con una probabilidad "
                             "alta que esta canción pertenece a la "
@@ -628,14 +721,18 @@ if buscar:
                         )
 
                     elif confianza >= 0.60:
+
                         mensaje = "¡Hay buenas posibilidades! ✨"
+
                         descripcion = (
                             "El modelo estima que esta canción "
                             "podría pertenecer al Billboard Top."
                         )
 
                     else:
+
                         mensaje = "¡El pronóstico es favorable! 🎵"
+
                         descripcion = (
                             "El modelo se inclina por la clase "
                             "Billboard Top, aunque su confianza "
@@ -658,7 +755,6 @@ if buscar:
 
                     st.balloons()
 
-                # Resultado negativo
                 else:
 
                     st.markdown(f"""
@@ -678,8 +774,11 @@ if buscar:
                     </div>
                     """, unsafe_allow_html=True)
 
-                # Indicador de confianza de la clase predicha
-                st.markdown("#### Nivel de confianza de la clase predicha")
+                # Barra de confianza
+
+                st.markdown(
+                    "#### Nivel de confianza de la clase predicha"
+                )
 
                 st.progress(float(confianza))
 
@@ -689,21 +788,19 @@ if buscar:
 
                 st.caption(
                     "El porcentaje es una estimación del modelo "
-                    "Random Forest y no garantiza que la canción "
-                    "alcance una posición específica en Billboard. "
-                    "El resultado depende de los datos utilizados "
-                    "durante el entrenamiento."
+                    "Random Forest y no garantiza una posición "
+                    "específica en Billboard."
                 )
 
 # ==========================================
-# 13. PIE DE PÁGINA
+# 14. PIE DE PÁGINA
 # ==========================================
 
 st.divider()
 
 st.markdown("""
 <div style="text-align:center; padding:15px;">
-    <p style="color:#bda8ec;">
+    <p style="color:#c5a8f5;">
         🎵 Billboard Predictor
     </p>
     <p style="font-size:13px; color:#aaa;">
