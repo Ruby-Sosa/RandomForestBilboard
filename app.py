@@ -3,9 +3,11 @@ import streamlit as st
 import pandas as pd
 import joblib
 import requests
+import unicodedata
+import re
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA APLICACIÓN
+# 1. CONFIGURACIÓN
 # ==========================================
 
 st.set_page_config(
@@ -37,11 +39,12 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 3. CARGAR DATASET ORIGINAL
+# 3. CARGAR DATASET
 # ==========================================
 
 @st.cache_data
 def cargar_datos():
+
     url = (
         "https://raw.githubusercontent.com/"
         "gerrymay/fcaData/refs/heads/master/"
@@ -56,7 +59,7 @@ def cargar_datos():
     for columna in columnas_texto:
         datos[columna] = datos[columna].str.strip().str.upper()
 
-    # Limpiar duraciones igual que en el entrenamiento
+    # Limpiar duraciones
     mediana = datos.loc[
         datos["durationSeg"] <= 600,
         "durationSeg"
@@ -67,7 +70,7 @@ def cargar_datos():
         "durationSeg"
     ] = mediana
 
-    # Convertir fecha y extraer sus componentes
+    # Procesar fechas
     fecha = pd.to_datetime(
         datos["chart_date"].astype(str),
         format="%Y%m%d"
@@ -77,9 +80,12 @@ def cargar_datos():
     datos["mes_lista"] = fecha.dt.month
     datos["dia_lista"] = fecha.dt.day
 
-    datos.drop(columns=["id", "chart_date"], inplace=True)
+    datos.drop(
+        columns=["id", "chart_date"],
+        inplace=True
+    )
 
-    # Aplicar One-Hot Encoding
+    # One-Hot Encoding
     datos = pd.get_dummies(
         datos,
         columns=["mood", "tempo", "genre", "artist_type"],
@@ -95,10 +101,32 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 4. BUSCAR CANCIÓN EN ITUNES
+# 4. NORMALIZAR TEXTO PARA COMPARACIONES
+# ==========================================
+
+def normalizar_texto(texto):
+
+    texto = str(texto).upper().strip()
+
+    texto = unicodedata.normalize("NFD", texto)
+
+    texto = "".join(
+        caracter for caracter in texto
+        if unicodedata.category(caracter) != "Mn"
+    )
+
+    texto = re.sub(r"[^A-Z0-9 ]", " ", texto)
+
+    texto = re.sub(r"\s+", " ", texto)
+
+    return texto.strip()
+
+# ==========================================
+# 5. BUSCAR CANCIÓN EN ITUNES
 # ==========================================
 
 def buscar_itunes(titulo, artista):
+
     url = "https://itunes.apple.com/search"
 
     parametros = {
@@ -119,7 +147,7 @@ def buscar_itunes(titulo, artista):
     return respuesta.json().get("results", [])
 
 # ==========================================
-# 5. FORMULARIO DE BÚSQUEDA
+# 6. FORMULARIO DE BÚSQUEDA
 # ==========================================
 
 st.subheader("Buscar canción")
@@ -130,9 +158,11 @@ artista = st.text_input("Nombre del artista")
 if st.button("Buscar y predecir", type="primary"):
 
     if not titulo.strip() or not artista.strip():
+
         st.warning("Escribe el título de la canción y el artista.")
 
     else:
+
         with st.spinner("Buscando canción..."):
 
             try:
@@ -143,148 +173,173 @@ if st.button("Buscar y predecir", type="primary"):
                 st.stop()
 
         if not resultados:
-            st.warning("No se encontró la canción en iTunes.")
+
+            st.warning("No se encontraron canciones en iTunes.")
 
         else:
-            # Buscar coincidencia por título y artista
-            coincidencia = None
 
-            for cancion in resultados:
-                nombre = cancion.get("trackName", "").upper()
-                interprete = cancion.get("artistName", "").upper()
+            # ==========================================
+            # 7. MOSTRAR RESULTADOS DE ITUNES
+            # ==========================================
 
-                if (
-                    titulo.strip().upper() in nombre
-                    and artista.strip().upper() in interprete
-                ):
-                    coincidencia = cancion
-                    break
+            st.success(
+                f"Se encontraron {len(resultados)} resultados."
+            )
 
-            if coincidencia is None:
+            opciones = []
+
+            for i, cancion in enumerate(resultados):
+
+                nombre = cancion.get("trackName", "Sin título")
+                interprete = cancion.get("artistName", "Artista desconocido")
+
+                opciones.append(
+                    f"{nombre} - {interprete}"
+                )
+
+            seleccion = st.selectbox(
+                "Selecciona la canción correcta:",
+                range(len(opciones)),
+                format_func=lambda i: opciones[i]
+            )
+
+            coincidencia = resultados[seleccion]
+
+            # ==========================================
+            # 8. MOSTRAR INFORMACIÓN
+            # ==========================================
+
+            st.subheader("Información de la canción")
+
+            st.write(
+                "**Título:**",
+                coincidencia.get("trackName", "No disponible")
+            )
+
+            st.write(
+                "**Artista:**",
+                coincidencia.get("artistName", "No disponible")
+            )
+
+            st.write(
+                "**Álbum:**",
+                coincidencia.get("collectionName", "No disponible")
+            )
+
+            st.write(
+                "**Género:**",
+                coincidencia.get("primaryGenreName", "No disponible")
+            )
+
+            imagen = coincidencia.get("artworkUrl100")
+
+            if imagen:
+                st.image(imagen, width=180)
+
+            vista_previa = coincidencia.get("previewUrl")
+
+            if vista_previa:
+                st.subheader("Vista previa")
+                st.audio(vista_previa)
+            else:
+                st.info("Esta canción no tiene vista previa disponible.")
+
+            # ==========================================
+            # 9. BUSCAR EN EL DATASET
+            # ==========================================
+
+            titulo_busqueda = normalizar_texto(
+                coincidencia.get("trackName", "")
+            )
+
+            artista_busqueda = normalizar_texto(
+                coincidencia.get("artistName", "")
+            )
+
+            datos_busqueda = datos.copy()
+
+            datos_busqueda["titulo_normalizado"] = (
+                datos_busqueda["title"].apply(normalizar_texto)
+            )
+
+            datos_busqueda["artista_normalizado"] = (
+                datos_busqueda["artist"].apply(normalizar_texto)
+            )
+
+            coincidencias = datos_busqueda[
+                (datos_busqueda["titulo_normalizado"] == titulo_busqueda)
+                &
+                (datos_busqueda["artista_normalizado"] == artista_busqueda)
+            ]
+
+            st.subheader("Predicción del modelo")
+
+            if coincidencias.empty:
+
                 st.warning(
-                    "Se encontraron canciones similares, "
-                    "pero no una coincidencia suficiente."
+                    "La canción fue encontrada en iTunes, "
+                    "pero no aparece en nuestro dataset de Billboard. "
+                    "Por eso no podemos generar una predicción "
+                    "con el modelo entrenado."
                 )
 
             else:
-                st.success("¡Canción encontrada!")
 
-                # ==========================================
-                # 6. MOSTRAR INFORMACIÓN
-                # ==========================================
+                registro = coincidencias.iloc[[0]].copy()
 
-                st.subheader("Información de la canción")
-
-                st.write(
-                    "**Título:**",
-                    coincidencia.get("trackName", "No disponible")
+                # Eliminar columnas que no utiliza el modelo
+                registro = registro.drop(
+                    columns=[
+                        "top",
+                        "title",
+                        "artist",
+                        "titulo_normalizado",
+                        "artista_normalizado"
+                    ]
                 )
 
-                st.write(
-                    "**Artista:**",
-                    coincidencia.get("artistName", "No disponible")
+                # Alinear las características
+                X_cancion = registro.reindex(
+                    columns=columnas,
+                    fill_value=0
                 )
 
-                st.write(
-                    "**Álbum:**",
-                    coincidencia.get("collectionName", "No disponible")
-                )
+                # Predicción
+                prediccion = modelo.predict(X_cancion)[0]
 
-                st.write(
-                    "**Género:**",
-                    coincidencia.get("primaryGenreName", "No disponible")
-                )
+                probabilidades = modelo.predict_proba(X_cancion)[0]
 
-                imagen = coincidencia.get("artworkUrl100")
-
-                if imagen:
-                    st.image(imagen, width=180)
-
-                # Vista previa
-                vista_previa = coincidencia.get("previewUrl")
-
-                if vista_previa:
-                    st.subheader("Vista previa")
-                    st.audio(vista_previa)
-                else:
-                    st.info("Esta canción no tiene vista previa disponible.")
-
-                # ==========================================
-                # 7. BUSCAR CARACTERÍSTICAS EN EL DATASET
-                # ==========================================
-
-                titulo_busqueda = coincidencia.get(
-                    "trackName", ""
-                ).strip().upper()
-
-                artista_busqueda = coincidencia.get(
-                    "artistName", ""
-                ).strip().upper()
-
-                coincidencias = datos[
-                    (datos["title"] == titulo_busqueda)
-                    &
-                    (datos["artist"] == artista_busqueda)
+                probabilidad_top = probabilidades[
+                    list(modelo.classes_).index(1)
                 ]
 
-                st.subheader("Predicción del modelo")
+                if prediccion == 1:
 
-                if coincidencias.empty:
-                    st.warning(
-                        "La canción no se encuentra en nuestro "
-                        "dataset de entrenamiento. No podemos "
-                        "realizar una predicción confiable con "
-                        "las características necesarias."
+                    st.success(
+                        "🎉 El modelo identifica esta canción "
+                        "como parte de la clase Billboard Top."
                     )
 
                 else:
-                    # Recuperar las características
-                    registro = coincidencias.iloc[[0]].copy()
 
-                    # Separar la variable objetivo
-                    X_cancion = registro.drop(
-                        columns=["top", "title", "artist"]
+                    st.info(
+                        "El modelo identifica esta canción "
+                        "como parte de la clase que no llegó al Billboard Top."
                     )
 
-                    # Asegurar el mismo orden de columnas
-                    X_cancion = X_cancion.reindex(
-                        columns=columnas,
-                        fill_value=0
-                    )
+                st.metric(
+                    "Probabilidad estimada de la clase Top",
+                    f"{probabilidad_top * 100:.2f}%"
+                )
 
-                    # Realizar predicción
-                    prediccion = modelo.predict(X_cancion)[0]
-
-                    probabilidades = modelo.predict_proba(X_cancion)[0]
-
-                    probabilidad_top = probabilidades[
-                        list(modelo.classes_).index(1)
-                    ]
-
-                    if prediccion == 1:
-                        st.success(
-                            "🎉 El modelo predice que la canción "
-                            "llegará al Billboard Top."
-                        )
-                    else:
-                        st.info(
-                            "El modelo predice que la canción "
-                            "no llegará al Billboard Top."
-                        )
-
-                    st.metric(
-                        "Probabilidad estimada de la clase Top",
-                        f"{probabilidad_top * 100:.2f}%"
-                    )
-
-                    st.caption(
-                        "Resultado generado por el modelo Random Forest "
-                        "con las características del dataset. "
-                        "La probabilidad no garantiza un resultado real."
-                    )
+                st.caption(
+                    "Resultado generado por el modelo Random Forest "
+                    "utilizando las características del dataset. "
+                    "La probabilidad no garantiza un resultado real."
+                )
 
 # ==========================================
-# 8. INFORMACIÓN ADICIONAL
+# 10. INFORMACIÓN ADICIONAL
 # ==========================================
 
 st.divider()
